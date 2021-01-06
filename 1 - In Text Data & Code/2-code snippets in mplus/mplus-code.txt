@@ -1,0 +1,250 @@
+## Code snippet for single variable dynamic panel:
+
+
+eta_y BY y2@1 y3@1 y4@1 y5@1 y6@1;
+
+y2 ON y1(rho_y);
+y3 ON y2(rho_y);
+y4 ON y3(rho_y);
+y5 ON y4(rho_y);
+y6 ON y5(rho_y);
+
+y1 WITH y1;
+eta_y WITH eta_y;
+y1 WITH eta_y;
+
+
+
+
+
+## Code snippet for two variable concurrent dynamic panel:
+
+
+eta_y BY y2@1 y3@1 y4@1 y5@1 y6@1;
+
+y2 ON y1(rho_y) x2(b1);
+y3 ON y2(rho_y) x3(b1);
+y4 ON y3(rho_y) x4(b1);
+y5 ON y4(rho_y) x5(b1);
+y6 ON y5(rho_y) x6(b1);
+
+x2 WITH x3 x4 x5 x6;
+x3 WITH x4 x5 x6;
+x4 WITH x5 x6;
+x5 WITH x6;
+
+eta_y WITH x2 x3 x4 x5 x6;
+y1 WITH eta_y x2 x3 x4 x5 x6;
+
+
+
+
+
+## Code snippet for two variable lagged dynamic panel:
+
+
+eta_y BY y2@1 y3@1 y4@1 y5@1 y6@1;
+
+y2 ON y1(rho_y) x1(b1);
+y3 ON y2(rho_y) x2(b1);
+y4 ON y3(rho_y) x3(b1);
+y5 ON y4(rho_y) x4(b1);
+y6 ON y5(rho_y) x5(b1);
+
+x1 WITH x2 x3 x4 x5;
+x2 WITH x3 x4 x5;
+x3 WITH x4 x5;
+x4 WITH x5;
+
+eta_y WITH x1 x2 x3 x4 x5;
+y1 WITH eta_y x1 x2 x3 x4 x5;
+
+
+## Code snippet for extensions of the two variable lagged dynamic panel:
+
+
+eta_y BY y2@1 y3@1 y4@1 y5@1 y6@1;
+eta_x BY x2@1 x3@1 x4@1 x5@1;
+
+y2 ON y1(rho_y) x1(b1);
+y3 ON y2(rho_y) x2(b1);
+y4 ON y3(rho_y) x3(b1);
+y5 ON y4(rho_y) x4(b1);
+y6 ON y5(rho_y) x5(b1);
+
+x2 ON x1(rho_x);
+x3 ON x2(rho_x);
+x4 ON x3(rho_x);
+x5 ON x4(rho_x);
+
+y1 WITH y1;
+x1 WITH x1;
+eta_y WITH eta_y;
+eta_x WITH eta_x;
+y1 WITH x1 eta_y eta_x;
+x1 WITH eta_y eta_x;
+eta_y WITH eta_x;
+
+
+
+## Code snippet for two variable reciprocal dynamics:
+
+
+eta_y BY y2@1 y3@1 y4@1 y5@1 y6@1;
+eta_x BY x2@1 x3@1 x4@1 x5@1 x6@1;
+
+y2 ON y1(rho_y) x1(b1);
+y3 ON y2(rho_y) x2(b1);
+y4 ON y3(rho_y) x3(b1);
+y5 ON y4(rho_y) x4(b1);
+y6 ON y5(rho_y) x5(b1);
+
+x2 ON x1(rho_x) y1(b2);
+x3 ON x2(rho_x) y2(b2);
+x4 ON x3(rho_x) y3(b2);
+x5 ON x4(rho_x) y4(b2);
+x6 ON x5(rho_x) y5(b2);
+
+x1 WITH x1;
+y1 WITH y1;
+
+eta_x WITH eta_x;
+eta_y WITH eta_y;
+
+x1 WITH y1;
+eta_x WITH eta_y
+
+x1 WITH eta_x eta_y
+y1 WITH eta_x eta_y
+
+
+
+## Code snippet for example model 1
+
+eta_y BY Per.2@1 Per.3@1 Per.4@1 Per.5@1 Per.6@1 Per.7@1 Per.8@1;
+
+Per.2 ON Per.1(rho_y) Aff.2(b1);
+Per.3 ON Per.1(rho_y) Aff.3(b1);
+Per.4 ON Per.1(rho_y) Aff.4(b1);
+Per.5 ON Per.1(rho_y) Aff.5(b1);
+Per.6 ON Per.1(rho_y) Aff.6(b1);
+Per.7 ON Per.1(rho_y) Aff.7(b1);
+Per.8 ON Per.1(rho_y) Aff.8(b1);
+
+Aff.2 WITH Aff.3 Aff.4 Aff.5 Aff.6 Aff.7 Aff.8;
+Aff.3 WITH Aff.4 Aff.5 Aff.6 Aff.7 Aff.8;
+Aff.4 WITH Aff.5 Aff.6 Aff.7 Aff.8;
+Aff.5 WITH Aff.6 Aff.7 Aff.8;
+Aff.6 WITH Aff.7 Aff.8;
+Aff.7 WITH Aff.8;
+
+Per.1 WITH Aff.2 Aff.3 Aff.4 Aff.5 Aff.6 Aff.7 Aff.8;
+
+eta_y WITH Per.1 Aff.2 Aff.3 Aff.4 Aff.5 Aff.6 Aff.7 Aff.8;
+
+
+
+
+
+## Code snippet for example model 2
+
+
+eta_y BY Per.2@1 Per.3@1 Per.4@1 Per.5@1 Per.6@1 Per.7@1 Per.8@1;
+
+Per.2 ON Per.1(rho_y) Aff.1(b1);
+Per.3 ON Per.1(rho_y) Aff.2(b1);
+Per.4 ON Per.1(rho_y) Aff.3(b1);
+Per.5 ON Per.1(rho_y) Aff.4(b1);
+Per.6 ON Per.1(rho_y) Aff.5(b1);
+Per.7 ON Per.1(rho_y) Aff.6(b1);
+Per.8 ON Per.1(rho_y) Aff.7(b1);
+
+Aff.1 WITH Aff.2 Aff.3 Aff.4 Aff.5 Aff.6 Aff.7;
+Aff.2 WITH Aff.3 Aff.4 Aff.5 Aff.6 Aff.7;
+Aff.3 WITH Aff.4 Aff.5 Aff.6 Aff.7;
+Aff.4 WITH Aff.5 Aff.6 Aff.7;
+Aff.5 WITH Aff.6 Aff.7;
+Aff.6 WITH Aff.7;
+
+Per.1 WITH Aff.1 Aff.2 Aff.3 Aff.4 Aff.5 Aff.6 Aff.7;
+
+eta_y WITH Per.1 Aff.1 Aff.2 Aff.3 Aff.4 Aff.5 Aff.6 Aff.7;
+
+
+
+
+## Code snippet for example model 3
+
+
+eta_y BY Per.2@1 Per.3@1 Per.4@1 Per.5@1 Per.6@1 Per.7@1 Per.8@1;
+eta_x BY Aff.2@1 Aff.3@1 Aff.4@1 Aff.5@1 Aff.6@1 Aff.7@1 Aff.8@1;
+
+Per.2 ON Per.1(rho_y) Aff.1(b1);
+Per.3 ON Per.1(rho_y) Aff.2(b1);
+Per.4 ON Per.1(rho_y) Aff.3(b1);
+Per.5 ON Per.1(rho_y) Aff.4(b1);
+Per.6 ON Per.1(rho_y) Aff.5(b1);
+Per.7 ON Per.1(rho_y) Aff.6(b1);
+Per.8 ON Per.1(rho_y) Aff.7(b1);
+
+Aff.2 ON Aff.1(rho_x) Per.1(b2);
+Aff.3 ON Aff.2(rho_x) Per.2(b2);
+Aff.4 ON Aff.2(rho_x) Per.3(b2);
+Aff.5 ON Aff.2(rho_x) Per.4(b2);
+Aff.6 ON Aff.2(rho_x) Per.5(b2);
+Aff.7 ON Aff.2(rho_x) Per.6(b2);
+Aff.8 ON Aff.2(rho_x) Per.7(b2);
+
+Aff.1 WITH Aff.1;
+Per.1 WITH Per.1;
+Aff.1 WITH Per.1;
+
+eta_x WITH eta_x;
+eta_y WITH eta_y;
+eta_x WITH eta_y;
+
+Aff.1 WITH eta_y;
+Per.1 WITH eta_x;
+
+Aff.1 WITH eta_x;
+Per.1 WITH eta_y;
+
+
+
+## Granger Causality code snippet
+
+
+
+eta_y BY Per.2@1 Per.3@1 Per.4@1 Per.5@1 Per.6@1 Per.7@1 Per.8@1;
+eta_x BY Aff.2@1 Aff.3@1 Aff.4@1 Aff.5@1 Aff.6@1 Aff.7@1 Aff.8@1;
+
+Per.2 ON Per.1(rho_y) Aff.1@0;
+Per.3 ON Per.1(rho_y) Aff.2@0;
+Per.4 ON Per.1(rho_y) Aff.3@0;
+Per.5 ON Per.1(rho_y) Aff.4@0;
+Per.6 ON Per.1(rho_y) Aff.5@0;
+Per.7 ON Per.1(rho_y) Aff.6@0;
+Per.8 ON Per.1(rho_y) Aff.7@0;
+
+Aff.2 ON Aff.1(rho_x) Per.1(b2);
+Aff.3 ON Aff.2(rho_x) Per.2(b2);
+Aff.4 ON Aff.2(rho_x) Per.3(b2);
+Aff.5 ON Aff.2(rho_x) Per.4(b2);
+Aff.6 ON Aff.2(rho_x) Per.5(b2);
+Aff.7 ON Aff.2(rho_x) Per.6(b2);
+Aff.8 ON Aff.2(rho_x) Per.7(b2);
+
+Aff.1 WITH Aff.1;
+Per.1 WITH Per.1;
+Aff.1 WITH Per.1;
+
+eta_x WITH eta_x;
+eta_y WITH eta_y;
+eta_x WITH eta_y;
+
+Aff.1 WITH eta_y;
+Per.1 WITH eta_x;
+
+Aff.1 WITH eta_x;
+Per.1 WITH eta_y;
+

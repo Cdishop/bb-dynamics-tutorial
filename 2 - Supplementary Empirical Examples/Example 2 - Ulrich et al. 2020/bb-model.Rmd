@@ -1,0 +1,259 @@
+---
+title: "Bollen & Brand Model - Empirical Example"
+output: pdf_document
+---
+
+```{r setup, include=FALSE, warning = F, message = F}
+knitr::opts_chunk$set(echo = TRUE, warning = F, message = F)
+```
+
+In this document, we'll apply Bollen and Brand's model to a second empirical data set. The data come from a paper by Orth, Clark, Donnellan, and Robins (2020) called, "Testing prospective effects in longitudinal research: Comparing seven competing cross-lagged models." Find the article [here](https://psycnet.apa.org/fulltext/2020-54836-001.html) and its correspdonding files [here](https://osf.io/5rjsm/). Below, we'll follow the same sequence that we applied in the article: `dp_mod1`, followed by `dp_mod2`, and finally `dp_mod3`.
+
+## Study Background & Data
+
+Orth et al. (2020) compiled several data sets, each assessing self-esteem (SE) and depression (DE) on multiple people over four waves. Specifically, their Open Science Framework (OSF) folder houses data from the following studies:
+
+* Berkeley Longitudinal Study (BLS)
+* California Families Project, children sample (CFP-C)
+* California Families Project, mothers sample (CFP-M)
+* My Work and I (MWI)
+* Your Personality (YP)
+
+We'll use the CFP-C sample in the analysis below. The CFP is an ongoing study of 674 Mexican-origin families from Northern California. Orth et al. (2020) report that their data come from waves 1, 3, 5, and 7, which were captured over two years among 674 adolescents. Self-esteem was measured with the Self-Description Questionnaire (SDQ), and depression was measured with the Early Adolescent Temperament Questionnaire-Revised (EATQ). The scores listed in their data are scale aggregates (i.e., mean scores across items on SDQ and EATQ, respectively). Citations for Orth et al.'s excellent manuscript and original data sources are shown below. 
+
+* Orth, U., Clark, D. A., Donnellan, M. B., & Robins, R. W. (2020). Testing prospective effects in longitudinal
+research: Comparing seven competing cross-lagged models. *Journal of Personality and Social Psychology.*
+
+* Robins, R. W., Hendin, H. M., & Trzesniewski, K. H. (2001). Measuring global self-esteem: Construct
+validation of a single-item measure and the Rosenberg Self-Esteem Scale. *Personality and Social
+Psychology Bulletin, 27*, 151-161. 
+
+* Robins, R. W., & Conger, K. J. (2017). *California Families Project [Sacramento and Woodland,
+California]: Item-level (producer) codebook*. Ann Arbor, MI: Inter-University Consortium for Political
+and Social Research. 
+
+* Meier, L. L., & Spector, P. E. (2013). Reciprocal effects of work stressors and counterproductive
+work behavior: A five-wave longitudinal study. *Journal of Applied Psychology, 98*, 529-539.
+
+* Orth, U., & Luciano, E. C. (2015). Self-esteem, narcissism, and stressful life events: Testing for selection and socialization. *Journal of Personality and Social Psychology, 109*, 707-721.
+
+## Data Cleaning
+
+Load the data, and load necessary libraries.
+
+```{r, warning = F, message = F}
+library(tidyverse)
+library(ggplot2)
+library(lavaan)
+library(kableExtra)
+library(tseries)
+library(plm)
+
+df <- read.table("CFP-C.dat")
+```
+
+Orth et al.'s item dictionary states the following:
+
+* In the data files for the CFP-C, the order of variables is as follows: ID, SE1, SE2, SE3, SE4, DE1, DE2, DE3, DE4.
+
+So, the first column lists participant ID's, the second self-esteem at time 1, the third self-esteem at time 2, and so on until depression at time 4. Notice that the data are already in wide form. Let's rename the columns to cohere with these labels.
+
+```{r}
+
+names(df) <- c("id",
+                'se.1',
+                'se.2',
+                'se.3',
+                'se.4',
+                'de.1',
+                'de.2',
+                'de.3',
+                'de.4')
+```
+
+In their description of the data, the authors state that missing values are coded as `-999`. Moreover, participant ID's were replaced with `-999`. You can see these aspects by peaking at the data.
+
+```{r}
+head(df) %>% kable() %>% kable_styling()
+```
+
+We need to replace the ID column with actual ID values (each row is a unique participant -- it doesn't matter that these new IDs won't match original participant IDs because we are not merging any data). We also need to replace variables with values of `-999` with `NA`. 
+
+```{r}
+
+rp_na <- function(x){ifelse(x == -999, NA, x)}
+df <- df %>% 
+  # id values
+  mutate(id = 1:nrow(df)) %>% 
+  # replace -999 with NA
+  mutate_if(is.numeric, rp_na)
+```
+
+Great. Let's plot the data by changing it to long form.
+
+```{r, warning = F, message = F}
+df_plot <- df %>% 
+  pivot_longer(cols = c(se.1,se.2,se.3,se.4,
+                        de.1,de.2,de.3,de.4),
+               names_to = "variable",
+               values_to = "value") %>% 
+  separate(variable, into = c("variable", 
+                              "time"),
+           sep = "\\.")
+
+ggplot(df_plot, aes(x = time, y = value, group = id)) + 
+  geom_point(alpha = 0.3) + 
+  geom_line(alpha = 0.3) + 
+  facet_grid(vars(variable))
+
+```
+
+Last, to make the tutorial as simple as possible, we'll select complete cases and rename the object to match the label we used in the article. Note that missing data is a serious issue. We are not suggesting that listwise deletion is an appropriate method. We are simply trying to make the models and code easy to understand. 
+
+```{r}
+ids_no_missing <- df %>% 
+  filter(is.na(se.1) == F,
+         is.na(se.2) == F,
+         is.na(se.3) == F,
+         is.na(se.4) == F) %>% 
+  filter(is.na(de.1) == F,
+         is.na(de.2) == F,
+         is.na(de.3) == F,
+         is.na(de.4) == F
+  ) %>% 
+  pull(id)
+
+df <- df %>% 
+  filter(id %in% ids_no_missing) -> data_f
+
+```
+
+## Modeling
+
+Check stationarity for both variables. Our data is already in wide format, so we need to change it to long format to run the ADF test. 
+
+```{r}
+
+data_f_long <- data_f %>% 
+  pivot_longer(cols = c(se.1,se.2,se.3,se.4,
+                        de.1,de.2,de.3,de.4),
+               names_to = "variable",
+               values_to = "value") %>% 
+  separate(variable, 
+           into = c("variable","time"),
+           sep = "\\.") %>% 
+  pivot_wider(names_from = "variable",
+              values_from = "value")
+
+data_dickey_structure <- plm.data(data_f_long,
+                                  index = c("id", "time"))
+```
+
+Run the tests.
+
+```{r}
+adf.test(data_dickey_structure$se)
+```
+
+Self-esteem is stationary,
+
+```{r}
+adf.test(data_dickey_structure$de)
+```
+
+as is depression.
+
+## Example 1
+
+The first example models a concurrent effect from self-esteem to depression.
+
+```{r}
+dp_mod1 <- "
+
+eta_y =~ 1*de.2 + 1*de.3 + 1*de.4
+
+de.2 ~ rho_y*de.1 + b1*se.2
+de.3 ~ rho_y*de.2 + b1*se.3
+de.4 ~ rho_y*de.3 + b1*se.4
+
+se.2 ~~ se.3 + se.4
+se.3 ~~ se.4
+
+de.1 ~~ se.2 + se.3 + se.4
+eta_y ~~ de.1 + se.2 + se.3 + se.4
+
+"
+
+dp_mod1_fit <- sem(dp_mod1, data = data_f)
+summary(dp_mod1_fit, fit.measures = T, standardized = T)
+
+```
+
+The model fit statistics are $\chi^2$(8) = 15.74; $p$ < 0.05; RMSEA = 0.042; CFI = 0.99; SRMR = 0.029, and the standardized coefficient estimates are as follows. Depression had a positive autoregressive effect ($B$ = 0.20, $SE$ = 0.033, $p$ < 0.05). The concurrent relationship between self-esteem and satisfaction was negative ($B$ = -0.47, $SE$ = 0.046, $p$ < 0.05), such that low self-esteem was association with higher depression at $t$. 
+
+## Example 2
+
+The second example demonstrates a lagged, two-variable dynamic panel. Self-esteem will now be evaluated as a lag-one predictor of depression.
+
+```{r}
+dp_mod2 <- "
+
+eta_y =~ 1*de.2 + 1*de.3 + 1*de.4
+
+de.2 ~ rho_y*de.1 + b1*se.1
+de.3 ~ rho_y*de.2 + b1*se.2
+de.4 ~ rho_y*de.3 + b1*se.3
+
+se.1 ~~ se.2 + se.3
+se.2 ~~ se.3
+
+de.1 ~~ se.1 + se.2 + se.3
+eta_y ~~ de.1 + se.1 + se.2 + se.3
+
+"
+
+dp_mod2_fit <- sem(dp_mod2, data = data_f)
+summary(dp_mod2_fit, fit.measures = T, standardized = T)
+```
+
+
+Model fit statistics are $\chi^2$(8) = 53.51, $p$ < 0.05; RMSEA = 0.11; CFI = 0.95; SRMR = 0.039, and the standardized parameter estimates are 0.23 ($SE$ = 0.036, $p$ < 0.05) for the autoregressive effect of depression and 0.11 ($SE$ = 0.042, $p$ < 0.05) for the lag-one effect of self-esteem. 
+
+## Example 3
+
+The last example demonstrates a reciprocal dynamic panel. Both self-esteem and depression will have autoregressive effects, and they will both act as lag-one inputs to the other state. 
+
+```{r}
+
+dp_mod3 <- "
+
+eta_y =~ 1*de.2 + 1*de.3 + 1*de.4
+eta_x =~ 1*se.2 + 1*se.3 + 1*se.4
+
+de.2 ~ rho_y*de.1 + b1*se.1
+de.3 ~ rho_y*de.2 + b1*se.2
+de.4 ~ rho_y*de.3 + b1*se.3
+
+se.2 ~ rho_x*se.1 + b2*de.1
+se.3 ~ rho_x*se.2 + b2*de.2
+se.4 ~ rho_x*se.3 + b2*de.3
+
+de.1 ~~ de.1
+se.1 ~~ se.1
+de.1 ~~ se.1
+
+eta_x ~~ eta_x
+eta_y ~~ eta_y
+eta_x ~~ eta_y
+
+de.1 ~~ eta_x
+de.1 ~~ eta_y
+se.1 ~~ eta_x
+se.1 ~~ eta_y
+"
+
+dp_mod3_fit <- sem(dp_mod3, data = data_f)
+summary(dp_mod3_fit, fit.measures = T, standardized = T)
+```
+
+The fit indices for this model are $\chi^2$(16) = 103.60, $p$ < 0.05; RMSEA = 0.10; CFI = 0.93; SRMR = 0.05, and the estimated coefficients are, respectively, 0.26 ($SE$ = 0.037, $p$ < 0.05) for the depression autoregressive effect, 0.23 ($SE$ = 0.042, $p$ < 0.05) for the self-esteem autoregressive effect, 0.16 ($SE$ = 0.043, $p$ < 0.05) for the lag-one effect of self-esteem on depression, and 0.071 ($SE$ = 0.02, $p$ < 0.05) for the lag-one effect of depression on self-esteem. 

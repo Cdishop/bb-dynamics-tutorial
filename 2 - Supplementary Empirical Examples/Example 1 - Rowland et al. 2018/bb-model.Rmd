@@ -1,0 +1,273 @@
+---
+title: "Bollen & Brand Model - Empirical Example"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE, warning = F, message = F}
+knitr::opts_chunk$set(echo = TRUE, 
+                      warning = F, 
+                      message = F)
+
+```
+
+In this document, we'll apply Bollen and Brand's model to empirical data. The data come from a study conducted by Rowland, Wenzel, and Kubiak (2018) called "A Mind Full of Happiness: How Mindfulness Shapes Affect Dynamics in Daily Life." Find the article [here](https://psycnet.apa.org/record/2018-63896-001) and its corresponding files [here](https://osf.io/gs4jq/). Below, we'll follow the same sequence that we applied in the article: `dp_mod1`, followed by `dp_mod2`, and finally `dp_mod3`.
+
+## Study Background & Data
+
+Rowland et al. (2018) assessed the relationship between mindfulness and affect using an undergraduate sample. There were many aspects to their study. Students were randomly assigned to a mindfulness training or control condition, underwent an experience sampling protocol in which they responded to surveys roughly six times per day for forty days, participated in weekly laboratory visits, and completed follow-up assessments. Moreover, the researchers captured both stait and trait measures, and they evaluated patterns across all of these data sources. 
+
+To make things simple, we are only going to focus on two variables: anger and satisfaction. Both were measured six times a day (using a beeper protocol) during the forty-day experience sampling procedure. Participants were asked to indicate how they felt at the current moment by adjusting a visual slider from 0 (not at all) to 100 (very much) on two items: satisfied and angry. Below, we aggregate assessments to the day-level, meaning that we take the average of participant $i$'s six anger scores on a given day and save that value. We then analyze data over the first eight days of the experience sampling protocol. Again, we are limiting ourselves to keep this document consistent with the tutorial. Rowland et al. (2018) conducted a superb study, and they were kind enough to post their data on OSF. This document is not a re-analysis of their data, but a tutorial on programming with respect to Bollen and Brand's model. There are additional aspects to their data that more advanced readers may wish to explore.
+
+In sum, we are going to evaluate two variables: anger and satisfaction. They were originally measured six times a day over 40 days. We are going to aggregate that to the day-level and then limit ourselves to the first 8 days. The data set we need to end up with, then, should look something like the following:
+
+```{r, echo = F, warning = F, message = F}
+
+library(kableExtra)
+library(tidyverse)
+
+example_df <- data.frame(
+  'id' = c(rep(1, 8),
+           2,2),
+  'time' = c(1,2,3,4,5,6,7,8,
+             1,2),
+  'anger' = c(rnorm(10, 20, 2)),
+  'satisfied' = c(rnorm(10, 20, 2))
+)
+
+example_df %>% 
+  kable() %>% 
+  kable_styling()
+
+```
+
+Participants are listed in the `id` column, periods or days are listed in the `time` column, and the two variables `anger` and `satisfaction` house their respective scores. Let's dig into the data and start cleaning. 
+
+## Data Cleaning
+
+Load the data, and load necessary libraries.
+
+```{r, warning = F, message = F}
+library(tidyverse)
+library(ggplot2)
+library(lavaan)
+library(kableExtra)
+library(tseries)
+library(plm)
+library(reshape2)
+
+df <- read.csv("Data.csv") 
+```
+
+Rowland et al.'s item [dictionary](https://osf.io/u83eb/) states the following:
+
+* id: participant number
+
+* dayno: day number
+
+* beep: signal number within day
+
+* sat: satisfaction
+
+* ang: anger
+
+There are of course other variables in the data, but we only need those listed above. 
+
+```{r}
+df <- df %>% 
+  select(id, dayno, beep, sat, ang)
+```
+
+Here's a snippet of the data.
+
+```{r}
+head(df, 8) %>% kable() %>% kable_styling()
+```
+
+We're hoping to get to data with one observation on both variables per day for each student. To get there, we need to aggregate over "beeps."
+
+```{r}
+df <- df %>% 
+  group_by(id, dayno) %>% 
+  summarize(
+    sat = mean(sat, na.rm = T),
+    ang = mean(ang, na.rm = T)
+  )
+
+head(df, 8) %>% kable() %>% kable_styling()
+```
+
+Great. Now we want only the first eight days for each student.
+
+```{r}
+df <- df %>% 
+  filter(dayno %in% c(1:8))
+```
+
+The data is ready. Let's plot it before analyzing. 
+
+```{r, warning = F, message = F}
+
+plot_df <- df %>% 
+  pivot_longer(cols = c(sat, ang),
+               names_to = "variable",
+               values_to = "values")
+
+ggplot(plot_df, aes(x = dayno, y = values, group = id)) +
+  geom_point(alpha = 0.3) + 
+  geom_line(alpha = 0.3) + 
+  facet_grid(vars(variable), scales = "free")
+```
+
+Finally, we can rename it so that the object matches what's written in the article.
+
+```{r}
+rowland_data <- as.data.frame(df)
+```
+
+## Modeling
+
+Check stationarity for both variables and change to wide format.
+
+```{r}
+
+data_dickey_structure <- rowland_data %>% 
+  filter(!is.na(ang) == T) %>% 
+  filter(!is.na(sat) == T)
+
+data_dickey_structure <- plm.data(data_dickey_structure, index = c("id", "dayno"))
+
+adf.test(data_dickey_structure$sat)
+adf.test(data_dickey_structure$ang)
+
+
+
+df_wide <- reshape(rowland_data, timevar = "dayno", idvar = "id", direction = "wide")
+
+```
+
+Both satisfaction and anger are stationary.
+
+### Example 1
+
+The first example models a concurrent effect from anger to satisfaction. 
+
+```{r}
+
+dp_mod1 <- "
+
+eta_y =~ 1*sat.2 + 1*sat.3 + 1*sat.4 + 1*sat.5 + 1*sat.6 + 1*sat.7 + 1*sat.8
+
+sat.2 ~ rho_y*sat.1 + b1*ang.2
+sat.3 ~ rho_y*sat.2 + b1*ang.3
+sat.4 ~ rho_y*sat.3 + b1*ang.4
+sat.5 ~ rho_y*sat.4 + b1*ang.5
+sat.6 ~ rho_y*sat.5 + b1*ang.6
+sat.7 ~ rho_y*sat.6 + b1*ang.7
+sat.8 ~ rho_y*sat.7 + b1*ang.8
+
+ang.2 ~~ ang.3 + ang.4 + ang.5 + ang.6 + ang.7 + ang.8
+ang.3 ~~ ang.4 + ang.5 + ang.6 + ang.7 + ang.8
+ang.4 ~~ ang.5 + ang.6 + ang.7 + ang.8
+ang.5 ~~ ang.6 + ang.7 + ang.8
+ang.6 ~~ ang.7 + ang.8
+ang.7 ~~ ang.8
+
+sat.1 ~~ ang.2 + ang.3 + ang.4 + ang.5 + ang.6 + ang.7 + ang.8
+eta_y ~~ sat.1 + ang.2 + ang.3 + ang.4 + ang.5 + ang.6 + ang.7 + ang.8
+
+
+"
+
+dp_mod1_fit <- sem(dp_mod1, data = df_wide, missing = "FIML")
+summary(dp_mod1_fit, fit.measures = T, standardized = T)
+```
+
+The model fit statistics are $\chi^2$(66) = 122.804; $p$ < 0.05; RMSEA = 0.083; CFI = 0.94; SRMR = 0.080, and the standardized coefficient estimates are as follows. Satisfaction had a positive autoregressive effect across time ($B$ = 0.12, $SE$ = 0.03, $p$ < 0.05). The concurrent relationship between anger and satisfaction was negative ($B$ = -0.47, $SE$ = 0.04, $p$ < 0.05), such that low anger at $t$ was associated with high satisfaction at $t$. 
+
+## Example 2
+
+The second example demonstrates a lagged, two-variable dynamic panel. Anger will now be evaluated as a lag-one predictor of satisfaction. 
+
+```{r}
+dp_mod2 <- "
+
+
+eta_y =~ 1*sat.2 + 1*sat.3 + 1*sat.4 + 1*sat.5 + 1*sat.6 + 1*sat.7 + 1*sat.8
+
+sat.2 ~ rho_y*sat.1 + b1*ang.1
+sat.3 ~ rho_y*sat.2 + b1*ang.2
+sat.4 ~ rho_y*sat.3 + b1*ang.3
+sat.5 ~ rho_y*sat.4 + b1*ang.4
+sat.6 ~ rho_y*sat.5 + b1*ang.5
+sat.7 ~ rho_y*sat.6 + b1*ang.6
+sat.8 ~ rho_y*sat.7 + b1*ang.7
+
+ang.1 ~~ ang.2 + ang.3 + ang.4 + ang.5 + ang.6 + ang.7
+ang.2 ~~ ang.3 + ang.4 + ang.5 + ang.6 + ang.7
+ang.3 ~~ ang.4 + ang.5 + ang.6 + ang.7
+ang.4 ~~ ang.5 + ang.6 + ang.7
+ang.5 ~~ ang.6 + ang.7
+ang.6 ~~ ang.7
+
+sat.1 ~~ ang.1 + ang.2 + ang.3 + ang.4 + ang.5 + ang.6 + ang.7
+eta_y ~~ sat.1 + ang.1 + ang.2 + ang.3 + ang.4 + ang.5 + ang.6 + ang.7
+
+
+"
+
+dp_mod2_fit <- sem(dp_mod2, data = df_wide, missing = "FIML")
+summary(dp_mod2_fit, fit.measures = T, standardized = T)
+```
+
+Model fit statistics are $\chi^2$(66) = 224.84, $p$ < 0.05; RMSEA = 0.14; CFI = 0.83; SRMR = 0.095, and the standardized parameter estimates are 0.24 ($SE$ = 0.05, $p$ < 0.05) for the autoregressive effect of satisfaction and 0.21 ($SE$ = 0.05, $p$ < 0.05) for the lag-one effect of anger. 
+
+## Example 3
+
+The last example demonstrates a reciprocal dynamic panel. Both anger and satisfaction will have autoregression, and they will both act as lag-one inputs to the other state. 
+
+```{r}
+dp_mod3 <- "
+
+eta_y =~ 1*sat.2 + 1*sat.3 + 1*sat.4 + 1*sat.5 + 1*sat.6 + 1*sat.7 + 1*sat.8
+eta_x =~ 1*ang.2 + 1*ang.3 + 1*ang.4 + 1*ang.5 + 1*ang.6 + 1*ang.7 + 1*ang.8
+
+sat.2 ~ rho_y*sat.1 + b1*ang.1
+sat.3 ~ rho_y*sat.2 + b1*ang.2
+sat.4 ~ rho_y*sat.3 + b1*ang.3
+sat.5 ~ rho_y*sat.4 + b1*ang.4
+sat.6 ~ rho_y*sat.5 + b1*ang.5
+sat.7 ~ rho_y*sat.6 + b1*ang.6
+sat.8 ~ rho_y*sat.7 + b1*ang.7
+
+ang.2 ~ rho_x*ang.1 + b2*sat.1
+ang.3 ~ rho_x*ang.2 + b2*sat.2
+ang.4 ~ rho_x*ang.3 + b2*sat.3
+ang.5 ~ rho_x*ang.4 + b2*sat.4
+ang.6 ~ rho_x*ang.5 + b2*sat.5
+ang.7 ~ rho_x*ang.6 + b2*sat.6
+ang.8 ~ rho_x*ang.7 + b2*sat.7
+
+sat.1 ~~ sat.1
+ang.1 ~~ ang.1
+sat.1 ~~ ang.1
+
+eta_x ~~ eta_x
+eta_y ~~ eta_y
+eta_x ~~ eta_y
+
+sat.1 ~~ eta_x
+sat.1 ~~ eta_y
+ang.1 ~~ eta_x
+ang.1 ~~ eta_y
+
+"
+
+dp_mod3_fit <- sem(dp_mod3, data = df_wide, missing = "FIML")
+summary(dp_mod3_fit, fit.measures = T, standardized = T)
+
+```
+
+The fit indices for this model are $\chi^2$(108) = 295.85, $p$ < 0.05; RMSEA = 0.12; CFI = 0.82; SRMR = 0.10, and the estimated coefficients are, respectively, 0.25 ($SE$ = 0.05, $p$ < 0.05) for the satisfaction autoregressive effect, 0.16 ($SE$ = 0.05, $p$ < 0.05) for the anger autoregressive effect, 0.23 ($SE$ = 0.05, $p$ < 0.05) for the lag-one effect of anger on satisfaction, and 0.09 ($SE$ = 0.04, $p$ < 0.05) for the lag-one effect of satisfaction on anger. 
